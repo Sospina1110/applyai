@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const PRICE_COP = "$19.900";
+const PRICE_COP = "$80.000";
 const PRICE_LABEL = "COP";
 
 const WELCOME_MESSAGE = {

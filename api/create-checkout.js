@@ -22,7 +22,7 @@ export default async function handler(req, res) {
               description: `CV estilo McKinsey para ${nombre || "ti"}`,
               images: [],
             },
-            unit_amount: 1990000, // $19.900 COP (en centavos)
+            unit_amount: 8000000, // $80.000 COP (en centavos)
           },
           quantity: 1,
         },
