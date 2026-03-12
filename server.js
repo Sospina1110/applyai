@@ -28,7 +28,7 @@ function vercelToExpress(handler) {
     try {
       await handler(req, res);
     } catch (err) {
-      console.error(err);
+      console.error("Handler error:", err.message, err.stack);
       res.status(500).json({ error: "Internal server error" });
     }
   };
