@@ -21,8 +21,7 @@ export default async function handler(req, res) {
       readyToGenerate,
     });
   } catch (error) {
-    const fs = await import("fs");
-    fs.default.writeFileSync("/tmp/chat_error.txt", String(error?.message) + "\n" + String(error?.stack));
-    return res.status(500).json({ error: error?.message || "Error desconocido" });
+    console.error("Error in chat:", error);
+    return res.status(500).json({ error: "Error procesando tu mensaje" });
   }
 }
