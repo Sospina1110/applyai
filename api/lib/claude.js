@@ -146,8 +146,9 @@ export async function chat(messages) {
   return response.content[0].text;
 }
 
-export async function extractCVData(conversation) {
-  const extractionPrompt = `Basándote en esta conversación, extrae TODOS los datos del CV en formato JSON.
+// Una sola llamada que extrae datos Y genera el perfil — reduce tiempo de 2 llamadas a 1
+export async function extractCVDataAndProfile(conversation) {
+  const prompt = `Basándote en esta conversación, extrae los datos del CV y genera el perfil profesional.
 
 Conversación:
 ${conversation}
@@ -165,7 +166,7 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta (sin texto a
   "semestre": "semestre actual (número)",
   "graduacion": "fecha graduación esperada",
   "idiomas": [
-    {"idioma": "Inglés", "nivel": "B2", "certificacion": "TOEFL 95" o null}
+    {"idioma": "Inglés", "nivel": "B2", "certificacion": "TOEFL 95 o null"}
   ],
   "experiencias": [
     {
@@ -174,73 +175,32 @@ Responde ÚNICAMENTE con un JSON válido con esta estructura exacta (sin texto a
       "organizacion": "empresa/organización",
       "inicio": "mes año",
       "fin": "mes año o Actualidad",
-      "descripcion": ["bullet 1 en formato acción-resultado", "bullet 2", "bullet 3"],
-      "logros": ["logro medible 1", "logro medible 2"]
+      "descripcion": ["verbo acción + qué hiciste + resultado/impacto", "bullet 2", "bullet 3"],
+      "logros": ["logro medible con número si hay", "logro 2"]
     }
   ],
   "habilidadesTecnicas": ["herramienta1", "herramienta2"],
-  "habilidadesBlandas": ["habilidad1 inferida", "habilidad2 inferida"]
+  "habilidadesBlandas": ["habilidad inferida de la conversación"],
+  "perfilProfesional": "Párrafo de 3-4 líneas en tercera persona, estilo McKinsey, orientado al puesto objetivo. Conciso, sin comillas."
 }
 
-Si algún campo no está disponible, usa null. Para las experiencias, redacta los bullets en formato McKinsey: verbo de acción + qué hiciste + resultado/impacto.`;
+Reglas:
+- Si un campo no está disponible usa null
+- Los bullets de experiencia: verbo de acción + qué hiciste + resultado/impacto
+- El perfilProfesional: adaptar al nivel de experiencia (si tiene mucha: destacar logros; si tiene poca: destacar potencial, formación e iniciativa)
+- Las habilidadesBlandas: inferirlas de la conversación, no pedirlas explícitamente`;
 
   const response = await client.messages.create({
-    model: "claude-opus-4-6",
+    model: "claude-haiku-4-5-20251001",
     max_tokens: 2048,
-    messages: [{ role: "user", content: extractionPrompt }],
+    messages: [{ role: "user", content: prompt }],
   });
 
   const text = response.content[0].text.trim();
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error("No se pudo extraer JSON de la respuesta");
-  return JSON.parse(jsonMatch[0]);
-}
-
-export async function generateProfileText(cvData) {
-  const hasExperience =
-    cvData.experiencias && cvData.experiencias.length > 0;
-  const expTypes = hasExperience
-    ? cvData.experiencias.map((e) => e.tipo)
-    : [];
-  const hasFormal =
-    expTypes.includes("trabajo") || expTypes.includes("pasantia");
-  const hasEntrepreneurship = expTypes.includes("emprendimiento");
-
-  let profileContext = "";
-  if (hasFormal) {
-    profileContext =
-      "Tiene experiencia laboral formal. El perfil debe destacar su experiencia y logros más relevantes.";
-  } else if (hasEntrepreneurship) {
-    profileContext =
-      "Tiene emprendimiento. El perfil debe destacar su espíritu emprendedor y los resultados obtenidos.";
-  } else if (hasExperience) {
-    profileContext =
-      "Tiene actividades universitarias (clubes, voluntariado, proyectos). El perfil debe destacar su participación activa e iniciativa.";
-  } else {
-    profileContext =
-      "No tiene experiencia formal. El perfil debe enfocarse en su formación, potencial y habilidades técnicas.";
-  }
-
-  const prompt = `Genera un PERFIL PROFESIONAL para el CV de esta persona.
-
-Datos:
-- Nombre: ${cvData.nombre}
-- Aplica a: ${cvData.targetJob}
-- Carrera: ${cvData.carrera} en ${cvData.universidad}, semestre ${cvData.semestre}
-- Graduación esperada: ${cvData.graduacion}
-- Experiencias: ${JSON.stringify(cvData.experiencias)}
-- Habilidades técnicas: ${cvData.habilidadesTecnicas?.join(", ")}
-- Habilidades blandas: ${cvData.habilidadesBlandas?.join(", ")}
-- Idiomas: ${cvData.idiomas?.map((i) => `${i.idioma} ${i.nivel}`).join(", ")}
-- Contexto: ${profileContext}
-
-Escribe SOLO el párrafo del perfil profesional. Máximo 4 líneas. Tercera persona. Estilo McKinsey: conciso, orientado a logros y al puesto objetivo. Sin comillas, sin título, solo el texto del párrafo.`;
-
-  const response = await client.messages.create({
-    model: "claude-opus-4-6",
-    max_tokens: 300,
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  return response.content[0].text.trim();
+  const data = JSON.parse(jsonMatch[0]);
+  const profileText = data.perfilProfesional || "";
+  delete data.perfilProfesional;
+  return { cvData: data, profileText };
 }

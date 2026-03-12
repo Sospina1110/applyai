@@ -1,6 +1,8 @@
-import { extractCVData, generateProfileText } from "./lib/claude.js";
+import { extractCVDataAndProfile } from "./lib/claude.js";
 import { generateCV } from "./lib/cv-generator.js";
 import { sendCVByEmail } from "./lib/email.js";
+
+export const maxDuration = 60;
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -14,31 +16,21 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Construir texto de la conversación
     const conversation = messages
       .map((m) => `${m.role === "user" ? "Usuario" : "Asistente"}: ${m.content}`)
       .join("\n\n");
 
-    // 2. Extraer datos del CV con Claude
-    console.log("Extrayendo datos del CV...");
-    const cvData = await extractCVData(conversation);
+    console.log("Extrayendo datos y generando perfil...");
+    const { cvData, profileText } = await extractCVDataAndProfile(conversation);
 
-    // 3. Generar texto del perfil profesional
-    console.log("Generando perfil profesional...");
-    const profileText = await generateProfileText(cvData);
-
-    // 4. Generar documento Word
     console.log("Generando documento Word...");
     const cvBuffer = await generateCV(cvData, profileText);
 
-    // 5. Enviar por email si hay dirección
     const emailTarget = email || cvData.email;
     if (emailTarget && process.env.RESEND_API_KEY) {
-      console.log("Enviando CV por email a:", emailTarget);
       await sendCVByEmail(emailTarget, cvData.nombre, cvBuffer);
     }
 
-    // 6. Devolver el archivo para descarga directa también
     const base64 = cvBuffer.toString("base64");
     const safeFileName = (cvData.nombre || "CV").replace(/\s+/g, "_");
 
@@ -46,13 +38,11 @@ export default async function handler(req, res) {
       success: true,
       fileName: `CV_${safeFileName}.docx`,
       fileBase64: base64,
-      emailSent: !!emailTarget,
+      emailSent: !!(emailTarget && process.env.RESEND_API_KEY),
       nombre: cvData.nombre,
     });
   } catch (error) {
     console.error("Error generando CV:", error);
-    return res.status(500).json({
-      error: "Error generando el CV: " + error.message,
-    });
+    return res.status(500).json({ error: "Error generando el CV: " + error.message });
   }
 }
